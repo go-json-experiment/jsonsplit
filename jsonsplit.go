@@ -133,8 +133,6 @@ import (
 	"time"
 	"unicode"
 
-	jsonv1std "encoding/json"
-
 	jsonv2 "github.com/go-json-experiment/json"            // TODO: Use "encoding/json/v2"
 	jsontext "github.com/go-json-experiment/json/jsontext" // TODO: Use "encoding/json/jsontext"
 	jsonv1 "github.com/go-json-experiment/json/v1"         // TODO: Use "encoding/json"
@@ -443,7 +441,7 @@ const (
 	// CallV2ButUponErrorReturnV1 specifies to call v2 by default,
 	// but only when an error occurs, to call v1 and return its result instead.
 	CallV2ButUponErrorReturnV1
-	// OnlyCallV1 specifies to only call v2 functionality.
+	// OnlyCallV2 specifies to only call v2 functionality.
 	OnlyCallV2
 
 	maxCallMode
@@ -866,7 +864,7 @@ func isPointerToZero(p reflect.Value) bool {
 // but allows specifying options to override default v1 behavior.
 func jsonv1Marshal(v any, o ...jsonv2.Options) ([]byte, error) {
 	if len(o) == 0 {
-		return jsonv1std.Marshal(v)
+		return jsonv1.Marshal(v)
 	}
 	var arr [8]jsonv2.Options
 	return jsonv2.Marshal(v, append(append(arr[:0], jsonv1.DefaultOptionsV1()), o...)...)
@@ -876,7 +874,7 @@ func jsonv1Marshal(v any, o ...jsonv2.Options) ([]byte, error) {
 // but allows specifying options to override default v1 behavior.
 func jsonv1Unmarshal(b []byte, v any, o ...jsonv2.Options) error {
 	if len(o) == 0 {
-		return jsonv1std.Unmarshal(b, v)
+		return jsonv1.Unmarshal(b, v)
 	}
 	var arr [8]jsonv2.Options
 	return jsonv2.Unmarshal(b, v, append(append(arr[:0], jsonv1.DefaultOptionsV1()), o...)...)
