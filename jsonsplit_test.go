@@ -73,35 +73,15 @@ func TestCodecMarshal(t *testing.T) {
 	}, {
 		mode:     CallBothButReturnV1,
 		in:       "\xde\xad\xbe\xef",
-		diffOpts: optsOf(jsontext.AllowInvalidUTF8, jsonv1.EscapeInvalidUTF8),
-	}, {
-		mode:     CallBothButReturnV1,
-		in:       "\xde\xad\xbe\xef",
-		inOpts:   jsonv1.EscapeInvalidUTF8(false),
-		diffOpts: optsOf(jsontext.AllowInvalidUTF8),
-	}, {
-		mode:     CallBothButReturnV1,
-		in:       "\xde\xad\xbe\xef",
-		inOpts:   jsonv1.EscapeInvalidUTF8(true),
 		diffOpts: optsOf(jsontext.AllowInvalidUTF8),
 	}, {
 		mode:     CallBothButReturnV2,
 		in:       "\xde\xad\xbe\xef",
-		diffOpts: optsOf(jsontext.AllowInvalidUTF8, jsonv1.EscapeInvalidUTF8),
-	}, {
-		mode:     CallBothButReturnV2,
-		in:       "\xde\xad\xbe\xef",
-		inOpts:   jsonv1.EscapeInvalidUTF8(false),
-		diffOpts: optsOf(jsontext.AllowInvalidUTF8),
-	}, {
-		mode:     CallBothButReturnV2,
-		in:       "\xde\xad\xbe\xef",
-		inOpts:   jsonv1.EscapeInvalidUTF8(true),
 		diffOpts: optsOf(jsontext.AllowInvalidUTF8),
 	}, {
 		mode:     CallV2ButUponErrorReturnV1,
 		in:       "\xde\xad\xbe\xef",
-		diffOpts: optsOf(jsontext.AllowInvalidUTF8, jsonv1.EscapeInvalidUTF8),
+		diffOpts: optsOf(jsontext.AllowInvalidUTF8),
 	}, {
 		mode: OnlyCallV2,
 		in:   "\xde\xad\xbe\xef",
@@ -117,7 +97,7 @@ func TestCodecMarshal(t *testing.T) {
 		in: struct {
 			A int `json:",omitempty"`
 		}{},
-		diffOpts: optsOf(jsonv1.OmitEmptyWithLegacyDefinition),
+		diffOpts: optsOf(jsonv1.OmitEmptyWithLegacySemantics),
 	}, {
 		mode: CallBothButReturnV2,
 		in: struct {
@@ -127,7 +107,7 @@ func TestCodecMarshal(t *testing.T) {
 	}, {
 		mode:     CallBothButReturnV2,
 		in:       time.Second,
-		diffOpts: optsOf(jsonv1.FormatTimeWithLegacySemantics),
+		diffOpts: optsOf(jsonv1.FormatDurationAsNano),
 	}, {
 		mode: CallBothButReturnV1,
 		in: struct {
@@ -149,7 +129,7 @@ func TestCodecMarshal(t *testing.T) {
 	}, {
 		mode:     CallBothButReturnV2,
 		in:       [32]byte{},
-		diffOpts: optsOf(jsonv1.FormatBytesWithLegacySemantics),
+		diffOpts: optsOf(jsonv1.FormatByteArrayAsArray),
 	}, {
 		mode: CallBothButReturnV1,
 		in: func() any {
@@ -363,12 +343,12 @@ func TestCodecUnmarshal(t *testing.T) {
 		mode:     CallV1ButUponErrorReturnV2,
 		in:       []byte(`"AAAAAAAAAAAAAAAAAAAAAA=="`),
 		newOut:   newer[[16]byte](),
-		diffOpts: optsOf(jsonv1.FormatBytesWithLegacySemantics),
+		diffOpts: optsOf(jsonv1.FormatByteArrayAsArray),
 	}, {
 		mode:     CallV2ButUponErrorReturnV1,
 		in:       []byte(`"AAAA\r\nAAAAAAAAAAAAAAAAAA=="`),
 		newOut:   newer[[]byte](),
-		diffOpts: optsOf(jsonv1.FormatBytesWithLegacySemantics),
+		diffOpts: optsOf(jsonv1.ParseBytesWithLooseRFC4648),
 	}, {
 		mode:     CallBothButReturnV1,
 		in:       []byte(`[1,2,3]`),
@@ -378,7 +358,7 @@ func TestCodecUnmarshal(t *testing.T) {
 		mode:     CallV2ButUponErrorReturnV1,
 		in:       []byte(`"2000-01-01T00:00:00,0Z"`),
 		newOut:   newer[time.Time](),
-		diffOpts: optsOf(jsonv1.FormatTimeWithLegacySemantics),
+		diffOpts: optsOf(jsonv1.ParseTimeWithLooseRFC3339),
 	}, {
 		mode:     CallV2ButUponErrorReturnV1,
 		in:       []byte(`[1,2,3]`),
@@ -388,7 +368,7 @@ func TestCodecUnmarshal(t *testing.T) {
 		mode:     CallV2ButUponErrorReturnV1,
 		in:       []byte(`1234`),
 		newOut:   newer[time.Duration](),
-		diffOpts: optsOf(jsonv1.FormatTimeWithLegacySemantics),
+		diffOpts: optsOf(jsonv1.FormatDurationAsNano),
 	}, {
 		mode: CallBothButReturnV2,
 		in:   []byte(`{"A":"true"}`),

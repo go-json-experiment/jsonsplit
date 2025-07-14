@@ -79,5 +79,5 @@ func Example() {
 	// 	GoValue:     {FirstName:John LastName:Dupe Age:0 Aliases:[]}
 	// 	JSONValueV1: {"firstName":"John","lastName":"Dupe","tags":null}
 	// 	JSONValueV2: {"firstName":"John","lastName":"Dupe","age":0,"tags":[]}
-	// 	Options:     [jsonv1.OmitEmptyWithLegacyDefinition jsonv2.FormatNilSliceAsNull]
+	// 	Options:     [jsonv1.OmitEmptyWithLegacySemantics jsonv2.FormatNilSliceAsNull]
 }
