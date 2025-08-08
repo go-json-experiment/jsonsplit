@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding"
 	"encoding/json"
+	jsonv1std "encoding/json"
 	"expvar"
 	"fmt"
 	"math"
@@ -20,6 +21,36 @@ import (
 	jsonv1 "github.com/go-json-experiment/json/v1"
 	"github.com/google/go-cmp/cmp"
 )
+
+// TestStandardOptionsV1 tests a special-case where specifying just
+// [jsonv1.DefaultOptionsV1] causes [jsonv1std] instead of [jsonv1]
+// to be called when operating under v1 mode.
+func TestStandardOptionsV1(t *testing.T) {
+	var err error
+	var c Codec
+
+	c.SetMarshalCallMode(OnlyCallV1)
+	_, err = c.Marshal((chan int)(nil), jsonv1.DefaultOptionsV1())
+	equalTypes[*jsonv1std.UnsupportedTypeError](t, err)
+
+	c.SetMarshalCallMode(OnlyCallV2)
+	_, err = c.Marshal((chan int)(nil), jsonv1.DefaultOptionsV1())
+	equalTypes[*jsonv1.UnsupportedTypeError](t, err)
+
+	c.SetUnmarshalCallMode(OnlyCallV1)
+	err = c.Unmarshal([]byte("nuLL"), new(any), jsonv1.DefaultOptionsV1())
+	equalTypes[*jsonv1std.SyntaxError](t, err)
+
+	c.SetUnmarshalCallMode(OnlyCallV2)
+	err = c.Unmarshal([]byte("nuLL"), new(any), jsonv1.DefaultOptionsV1())
+	equalTypes[*jsonv1.SyntaxError](t, err)
+}
+
+func equalTypes[Want any](t *testing.T, got any) {
+	if reflect.TypeOf(got) != reflect.TypeFor[Want]() {
+		t.Errorf("type mismatch: got %v, want %v", reflect.TypeOf(got), reflect.TypeFor[Want]())
+	}
+}
 
 // callerPlus adjusts file:line as file:line+n.
 func callerPlus(s string, n int) string {
