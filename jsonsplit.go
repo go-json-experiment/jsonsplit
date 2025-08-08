@@ -133,6 +133,8 @@ import (
 	"time"
 	"unicode"
 
+	jsonv1std "encoding/json"
+
 	jsonv2 "github.com/go-json-experiment/json"            // TODO: Use "encoding/json/v2"
 	jsontext "github.com/go-json-experiment/json/jsontext" // TODO: Use "encoding/json/jsontext"
 	jsonv1 "github.com/go-json-experiment/json/v1"         // TODO: Use "encoding/json"
@@ -473,7 +475,12 @@ func (m CallMode) checkValid() {
 // depending on the mode specified in [Codec.SetMarshalCallRatio].
 // If both v1 and v2 are called, it checks whether any differences
 // are detected in the serialized JSON output values.
+//
 // The specified options o is applied on top of the default v1 or v2 options.
+// If o is empty or is exactly equal to [jsonv1.DefaultOptionsV1],
+// then this calls [jsonv1std.Marshal] instead of [jsonv1.Marshal]
+// when operating in v1 mode. This allows for detection of differences
+// between [jsonv1std] and [jsonv1].
 func (c *Codec) Marshal(v any, o ...jsonv2.Options) (b []byte, err error) {
 	c.NumMarshalTotal.Add(1)
 	defer func() {
@@ -571,7 +578,12 @@ func (c *Codec) Marshal(v any, o ...jsonv2.Options) (b []byte, err error) {
 // depending on the mode specified in [Codec.SetUnmarshalCallRatio].
 // If both v1 and v2 are called, it checks whether any differences
 // are detected in the deserialized Go output values.
+//
 // The specified options o is applied on top of the default v1 or v2 options.
+// If o is empty or is exactly equal to [jsonv1.DefaultOptionsV1],
+// then this calls [jsonv1std.Unmarshal] instead of [jsonv1.Unmarshal]
+// when operating in v1 mode. This allows for detection of differences
+// between [jsonv1std] and [jsonv1].
 func (c *Codec) Unmarshal(b []byte, v any, o ...jsonv2.Options) (err error) {
 	c.NumUnmarshalTotal.Add(1)
 	c.UnmarshalSizeHistogram.insertSize(len(b))
@@ -863,8 +875,8 @@ func isPointerToZero(p reflect.Value) bool {
 // jsonv1Marshal is like [jsonv1.Marshal],
 // but allows specifying options to override default v1 behavior.
 func jsonv1Marshal(v any, o ...jsonv2.Options) ([]byte, error) {
-	if len(o) == 0 {
-		return jsonv1.Marshal(v)
+	if len(o) == 0 || (len(o) == 1 && o[0] == jsonv1.DefaultOptionsV1()) {
+		return jsonv1std.Marshal(v)
 	}
 	var arr [8]jsonv2.Options
 	return jsonv2.Marshal(v, append(append(arr[:0], jsonv1.DefaultOptionsV1()), o...)...)
@@ -873,8 +885,8 @@ func jsonv1Marshal(v any, o ...jsonv2.Options) ([]byte, error) {
 // jsonv1Unmarshal is like [jsonv1.Unmarshal],
 // but allows specifying options to override default v1 behavior.
 func jsonv1Unmarshal(b []byte, v any, o ...jsonv2.Options) error {
-	if len(o) == 0 {
-		return jsonv1.Unmarshal(b, v)
+	if len(o) == 0 || (len(o) == 1 && o[0] == jsonv1.DefaultOptionsV1()) {
+		return jsonv1std.Unmarshal(b, v)
 	}
 	var arr [8]jsonv2.Options
 	return jsonv2.Unmarshal(b, v, append(append(arr[:0], jsonv1.DefaultOptionsV1()), o...)...)
