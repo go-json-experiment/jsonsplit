@@ -1,3 +1,7 @@
+// Copyright 2025 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 // Package jsonsplit provides JSON functionality that can dynamically switch
 // the underlying implementation between [jsonv1] and [jsonv2].
 // The purpose of this package is to provide a gradual means for migrating
@@ -852,20 +856,61 @@ func (c *Codec) errorsEqual(err1, err2 error) bool {
 }
 
 func (c *Codec) cloneGoValue(v any) any {
-	// If possible, use the custom clone function,
-	// but fallback on trivial cloning if it returns nil.
 	if c.CloneGoValue != nil {
 		if v := c.CloneGoValue(v); v != nil {
 			return v
 		}
 	}
+	return cloneGoValue(v)
+}
 
-	// The only value that can trivially be cloned is a pointer to a zero'd value.
-	p := reflect.ValueOf(v)
-	if !isPointerToZero(p) {
-		return nil
+// cloneGoValue clones the input value such that the result
+// does not alias any mutable memory.
+// It returns nil if v cannot be cloned.
+func cloneGoValue(v any) any {
+	src := reflect.ValueOf(v)
+	if src.Kind() == reflect.Pointer && !src.IsNil() {
+		dst := reflect.New(src.Elem().Type())
+		if src.Elem().IsZero() {
+			return dst.Interface()
+		} else if canShallowCopy(src.Elem()) {
+			dst.Elem().Set(src.Elem())
+			return dst.Interface()
+		}
+	} else if canShallowCopy(src) {
+		return v
 	}
-	return reflect.New(p.Elem().Type()).Interface()
+	return nil
+}
+
+// canShallowCopy reports whether the value can safely be shallow copied
+// without referencing any mutable memory shared by the source value.
+func canShallowCopy(v reflect.Value) bool {
+	switch v.Kind() {
+	case reflect.Invalid, reflect.Bool, reflect.String,
+		reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+		reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128:
+		return true // primitives can always be shallow copied
+	case reflect.Array:
+		for i := range v.Len() {
+			if !canShallowCopy(v.Index(i)) {
+				return false
+			}
+		}
+		return true // arrays are shallow copyable if elements are shallow copyable
+	case reflect.Struct:
+		for i := range v.NumField() {
+			if !canShallowCopy(v.Field(i)) {
+				return false
+			}
+		}
+		return true // structs are shallow copyable if fields are shallow copyable
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice, reflect.UnsafePointer:
+		return v.IsNil() // composite types are shallow copyable only if nil
+	default:
+		return v.IsZero() // unknown kind, but zero value is always shallow copyable
+	}
 }
 
 func isPointerToZero(p reflect.Value) bool {

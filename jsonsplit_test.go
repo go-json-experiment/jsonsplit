@@ -1,6 +1,11 @@
+// Copyright 2025 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package jsonsplit
 
 import (
+	"archive/tar"
 	"bytes"
 	"encoding"
 	"encoding/json"
@@ -9,7 +14,9 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"path"
 	"reflect"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -21,6 +28,11 @@ import (
 	jsonv1 "github.com/go-json-experiment/json/v1"
 	"github.com/google/go-cmp/cmp"
 )
+
+func baseCaller() string {
+	_, file, line, _ := runtime.Caller(1)
+	return fmt.Sprintf("%s:%d", path.Base(file), line)
+}
 
 // TestStandardOptionsV1 tests a special-case where specifying just
 // [jsonv1.DefaultOptionsV1] causes [jsonv1std] instead of [jsonv1]
@@ -285,6 +297,7 @@ func TestCodecUnmarshal(t *testing.T) {
 	}
 
 	for _, tt := range []struct {
+		where    string
 		mode     CallMode
 		in       []byte
 		newOut   func() any
@@ -292,153 +305,185 @@ func TestCodecUnmarshal(t *testing.T) {
 		diffOpts jsonv2.Options
 		canClone bool
 	}{{
+		where:  baseCaller(),
 		mode:   OnlyCallV1,
 		in:     []byte("\"\xde\xad\xbe\xef\""),
 		newOut: newer[string](),
 	}, {
+		where:  baseCaller(),
 		mode:   CallV1ButUponErrorReturnV2,
 		in:     []byte("\"\xde\xad\xbe\xef\""),
 		newOut: newer[string](),
 	}, {
+		where:    baseCaller(),
 		mode:     CallBothButReturnV1,
 		in:       []byte("\"\xde\xad\xbe\xef\""),
 		newOut:   newer[string](),
 		diffOpts: optsOf(jsontext.AllowInvalidUTF8),
 	}, {
+		where:  baseCaller(),
 		mode:   CallBothButReturnV1,
 		in:     []byte("\"\xde\xad\xbe\xef\""),
 		newOut: newer[string](),
 		inOpts: jsontext.AllowInvalidUTF8(false),
 	}, {
+		where:  baseCaller(),
 		mode:   CallBothButReturnV1,
 		in:     []byte("\"\xde\xad\xbe\xef\""),
 		newOut: newer[string](),
 		inOpts: jsontext.AllowInvalidUTF8(true),
 	}, {
+		where:  baseCaller(),
 		mode:   CallBothButReturnV2,
 		in:     []byte("\"\xde\xad\xbe\xef\""),
 		newOut: newer[string](),
 		inOpts: jsontext.AllowInvalidUTF8(false),
 	}, {
+		where:  baseCaller(),
 		mode:   CallBothButReturnV2,
 		in:     []byte("\"\xde\xad\xbe\xef\""),
 		newOut: newer[string](),
 		inOpts: jsontext.AllowInvalidUTF8(true),
 	}, {
+		where:    baseCaller(),
 		mode:     CallV2ButUponErrorReturnV1,
 		in:       []byte("\"\xde\xad\xbe\xef\""),
 		newOut:   newer[string](),
 		diffOpts: optsOf(jsontext.AllowInvalidUTF8),
 	}, {
+		where:  baseCaller(),
 		mode:   OnlyCallV2,
 		in:     []byte("\"\xde\xad\xbe\xef\""),
 		newOut: newer[string](),
 	}, {
+		where:    baseCaller(),
 		mode:     CallV2ButUponErrorReturnV1,
 		in:       []byte(`{"dupe":1,"dupe":2}`),
 		newOut:   newer[map[string]int](),
 		diffOpts: optsOf(jsontext.AllowDuplicateNames),
 	}, {
+		where:  baseCaller(),
 		mode:   CallV2ButUponErrorReturnV1,
 		in:     []byte(`{"dupe":1,"dupe":2}`),
 		newOut: newer[map[string]int](),
 		inOpts: jsontext.AllowDuplicateNames(true),
 	}, {
+		where:  baseCaller(),
 		mode:   CallV2ButUponErrorReturnV1,
 		in:     []byte(`{"firstname":"john","FIRSTNAME":"jim"}`),
 		newOut: newer[struct{ FirstName string }](),
 	}, {
+		where:    baseCaller(),
 		mode:     CallBothButReturnV2,
 		in:       []byte(`{"firstname":"john","FIRSTNAME":"jim"}`),
 		newOut:   newer[struct{ FirstName string }](),
 		diffOpts: optsOf(jsontext.AllowDuplicateNames, jsonv2.MatchCaseInsensitiveNames),
 	}, {
+		where:    baseCaller(),
 		mode:     CallV2ButUponErrorReturnV1,
 		in:       []byte(`{"firstname":"john","FIRSTNAME":"jim"}`),
 		newOut:   newer[struct{ FirstName string }](),
 		inOpts:   jsonv2.MatchCaseInsensitiveNames(true),
 		diffOpts: optsOf(jsontext.AllowDuplicateNames),
 	}, {
+		where:    baseCaller(),
 		mode:     CallBothButReturnV2,
 		in:       []byte(`{"first_name":"john","FIRST_NAME":"jim"}`),
 		newOut:   newer[struct{ FirstName string }](),
 		inOpts:   jsonv2.JoinOptions(jsonv2.MatchCaseInsensitiveNames(true)),
 		diffOpts: optsOf(jsonv1.MatchCaseSensitiveDelimiter),
 	}, {
+		where:    baseCaller(),
 		mode:     CallBothButReturnV2,
 		in:       []byte(`{"first_name":"john","FIRST_NAME":"jim"}`),
 		newOut:   newer[struct{ FirstName string }](),
 		inOpts:   jsonv2.JoinOptions(jsonv2.MatchCaseInsensitiveNames(true), jsonv1.MatchCaseSensitiveDelimiter(false)),
 		diffOpts: optsOf(jsontext.AllowDuplicateNames),
 	}, {
+		where:    baseCaller(),
 		mode:     CallV1ButUponErrorReturnV2,
 		in:       []byte(`"AAAAAAAAAAAAAAAAAAAAAA=="`),
 		newOut:   newer[[16]byte](),
 		diffOpts: optsOf(jsonv1.FormatByteArrayAsArray),
 	}, {
+		where:    baseCaller(),
 		mode:     CallV2ButUponErrorReturnV1,
 		in:       []byte(`"AAAA\r\nAAAAAAAAAAAAAAAAAA=="`),
 		newOut:   newer[[]byte](),
 		diffOpts: optsOf(jsonv1.ParseBytesWithLooseRFC4648),
 	}, {
+		where:    baseCaller(),
 		mode:     CallBothButReturnV1,
 		in:       []byte(`[1,2,3]`),
 		newOut:   newer[[]byte](),
 		diffOpts: optsOf(jsonv1.FormatBytesWithLegacySemantics),
 	}, {
+		where:    baseCaller(),
 		mode:     CallV2ButUponErrorReturnV1,
 		in:       []byte(`"2000-01-01T00:00:00,0Z"`),
 		newOut:   newer[time.Time](),
 		diffOpts: optsOf(jsonv1.ParseTimeWithLooseRFC3339),
 	}, {
+		where:    baseCaller(),
 		mode:     CallV2ButUponErrorReturnV1,
 		in:       []byte(`[1,2,3]`),
 		newOut:   newer[[4]int](),
 		diffOpts: optsOf(jsonv1.UnmarshalArrayFromAnyLength),
 	}, {
+		where:    baseCaller(),
 		mode:     CallV2ButUponErrorReturnV1,
 		in:       []byte(`1234`),
 		newOut:   newer[time.Duration](),
 		diffOpts: optsOf(jsonv1.FormatDurationAsNano),
 	}, {
-		mode: CallBothButReturnV2,
-		in:   []byte(`{"A":"true"}`),
+		where: baseCaller(),
+		mode:  CallBothButReturnV2,
+		in:    []byte(`{"A":"true"}`),
 		newOut: newer[struct {
 			A bool `json:",string"`
 		}](),
 		diffOpts: optsOf(jsonv1.StringifyWithLegacySemantics),
 	}, {
-		mode: CallBothButReturnV1,
-		in:   []byte(`{"A":0.0}`),
+		where: baseCaller(),
+		mode:  CallBothButReturnV1,
+		in:    []byte(`{"A":0.0}`),
 		newOut: newer[struct {
 			A float64 `json:",format:nonfinite,omitzero"`
 		}](),
 		diffOpts: optsOf(jsonv1.ReportErrorsWithLegacySemantics),
 	}, {
-		mode: CallBothButReturnV1,
-		in:   []byte(`{"2000-01-01T00:00:00Z":5}`),
+		where: baseCaller(),
+		mode:  CallBothButReturnV1,
+		in:    []byte(`{"2000-01-01T00:00:00Z":5}`),
 		newOut: newer[map[struct {
 			time.Time
 			encoding.TextUnmarshaler // cancels out UnmarshalText in time.Time, leaving only UnmarshalJSON
 		}]int](),
 		diffOpts: optsOf(jsonv1.CallMethodsWithLegacySemantics),
 	}, {
+		where:  baseCaller(),
 		mode:   CallV1ButUponErrorReturnV2,
 		in:     []byte(`{"Fizz":null}`),
 		newOut: func() any { return &struct{ Fizz string }{"something"} },
 	}, {
-		mode:   CallBothButReturnV1,
-		in:     []byte(`{"Fizz":null}`),
-		newOut: func() any { return &struct{ Fizz string }{"something"} },
+		where:    baseCaller(),
+		mode:     CallBothButReturnV1,
+		in:       []byte(`{"Fizz":null}`),
+		newOut:   func() any { return &struct{ Fizz string }{"something"} },
+		diffOpts: optsOf(jsonv1.MergeWithLegacySemantics),
 	}, {
-		mode:   CallBothButReturnV2,
-		in:     []byte(`{"Fizz":null}`),
-		newOut: func() any { return &struct{ Fizz string }{"something"} },
+		where:    baseCaller(),
+		mode:     CallBothButReturnV2,
+		in:       []byte(`{"Fizz":null}`),
+		newOut:   func() any { return &struct{ Fizz string }{"something"} },
+		diffOpts: optsOf(jsonv1.MergeWithLegacySemantics),
 	}, {
+		where:  baseCaller(),
 		mode:   CallV2ButUponErrorReturnV1,
 		in:     []byte(`{"Fizz":null}`),
 		newOut: func() any { return &struct{ Fizz string }{"something"} },
 	}, {
+		where:    baseCaller(),
 		mode:     CallBothButReturnV2,
 		in:       []byte(`{"Fizz":null}`),
 		newOut:   func() any { return &struct{ Fizz string }{"something"} },
@@ -452,7 +497,7 @@ func TestCodecUnmarshal(t *testing.T) {
 				codec.CloneGoValue = func(in any) any {
 					out := tt.newOut()
 					if !reflect.DeepEqual(in, out) {
-						t.Error("clone is not equal")
+						t.Errorf("%s: clone is not equal", tt.where)
 					}
 					return out
 				}
@@ -540,7 +585,7 @@ func TestCodecUnmarshal(t *testing.T) {
 			}
 			wantMetrics.UnmarshalSizeHistogram.insertSize(len(tt.in))
 			if !reflect.DeepEqual(gotVal, wantVal) || !reflect.DeepEqual(gotErr, wantErr) {
-				t.Errorf("Unmarshal:\n\tgot  (%s, %v)\n\twant (%s, %v)", gotVal, gotErr, wantVal, wantErr)
+				t.Errorf("%s: Unmarshal:\n\tgot  (%s, %v)\n\twant (%s, %v)", tt.where, gotVal, gotErr, wantVal, wantErr)
 			}
 
 			// Check any reported difference.
@@ -562,7 +607,7 @@ func TestCodecUnmarshal(t *testing.T) {
 				}),
 				cmp.Exporter(func(t reflect.Type) bool { return true }),
 			); d != "" {
-				t.Errorf("Difference mismatch (-got +want):\n%s", d)
+				t.Errorf("%s: Difference mismatch (-got +want):\n%s", tt.where, d)
 			}
 			gotDiff = Difference{} // clear for next test run
 
@@ -575,7 +620,7 @@ func TestCodecUnmarshal(t *testing.T) {
 					return out
 				}),
 			); d != "" {
-				t.Errorf("Metrics mismatch (-got +want):\n%s", d)
+				t.Errorf("%s: Metrics mismatch (-got +want):\n%s", tt.where, d)
 			}
 			wantMetrics = CodecMetrics{}        // clear for next test run
 			codec.CodecMetrics = CodecMetrics{} // clear for next test run
@@ -673,6 +718,56 @@ func TestDefaultOptionsV1(t *testing.T) {
 	); d != "" {
 		t.Errorf("DefaultOptionsV1 mismatch (-got, +want):\n%s", d)
 	}
+}
+
+func TestCloneGoValue(t *testing.T) {
+	tests := []struct {
+		where string
+		in    any
+		want  any
+	}{{
+		where: baseCaller(),
+		in:    nil,
+		want:  nil,
+	}, {
+		where: baseCaller(),
+		in:    5,
+		want:  5,
+	}, {
+		where: baseCaller(),
+		in:    "hello, world",
+		want:  "hello, world",
+	}, {
+		where: baseCaller(),
+		in:    ptrTo(tar.Header{}),
+		want:  ptrTo(tar.Header{}),
+	}, {
+		where: baseCaller(),
+		in:    ptrTo(tar.Header{Typeflag: 'f', Name: "fizz", Size: 123, Uid: 456, Uname: "root", ModTime: time.Date(2025, 1, 2, 3, 4, 5, 6, time.UTC)}),
+		want:  ptrTo(tar.Header{Typeflag: 'f', Name: "fizz", Size: 123, Uid: 456, Uname: "root", ModTime: time.Date(2025, 1, 2, 3, 4, 5, 6, time.UTC)}),
+	}, {
+		where: baseCaller(),
+		in:    ptrTo(ptrTo(tar.Header{})),
+		want:  nil,
+	}, {
+		where: baseCaller(),
+		in:    ptrTo(tar.Header{Xattrs: map[string]string{"fizz": "buzz"}}),
+		want:  nil, // cannot copy due to Xattrs map
+	}, {
+		where: baseCaller(),
+		in:    ptrTo(5),
+		want:  ptrTo(5),
+	}}
+	for _, tt := range tests {
+		got := cloneGoValue(tt.in)
+		if d := cmp.Diff(got, tt.want, cmp.Exporter(func(reflect.Type) bool { return true })); d != "" {
+			t.Errorf("%s: clone mismatch (-got +want)\n:%s", tt.where, d)
+		}
+	}
+}
+
+func ptrTo[T any](v T) *T {
+	return &v
 }
 
 func BenchmarkMarshal(b *testing.B) {
