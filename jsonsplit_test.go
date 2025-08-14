@@ -587,7 +587,7 @@ func TestCallModeRatio(t *testing.T) {
 	for _, tt := range []struct {
 		mode1 CallMode
 		mode2 CallMode
-		ratio float64
+		ratio float32
 	}{
 		{OnlyCallV1, OnlyCallV1, 0},
 		{OnlyCallV1, OnlyCallV1, 1.0},
@@ -615,7 +615,7 @@ func TestCallModeRatio(t *testing.T) {
 					ok = true
 					break
 				}
-				ratio := float64(n2) / float64(n1+n2)
+				ratio := float32(n2) / float32(n1+n2)
 				if 0.99*tt.ratio <= ratio && ratio <= 1.01*tt.ratio {
 					ok = true
 					break
