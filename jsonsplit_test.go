@@ -173,7 +173,7 @@ func TestCodecMarshal(t *testing.T) {
 			codec.SetMarshalCallMode(tt.mode)
 
 			// Marshal via the codec, jsonv1, and jsonv2.
-			c := callerPlus(caller(), 1)
+			c := callerPlus(codec.caller(), 1)
 			gotBuf, gotErr := codec.Marshal(tt.in, tt.inOpts)
 			wantBufV1, wantErrV1 := jsonv1Marshal(tt.in, tt.inOpts)
 			wantBufV2, wantErrV2 := jsonv2.Marshal(tt.in, tt.inOpts)
@@ -459,7 +459,7 @@ func TestCodecUnmarshal(t *testing.T) {
 			}
 
 			// Unmarshal via the codec, jsonv1, and jsonv2.
-			c := callerPlus(caller(), 2)
+			c := callerPlus(codec.caller(), 2)
 			gotVal, wantValV1, wantValV2 := tt.newOut(), tt.newOut(), tt.newOut()
 			gotErr := codec.Unmarshal(tt.in, gotVal, tt.inOpts)
 			wantErrV1 := jsonv1Unmarshal(tt.in, wantValV1, tt.inOpts)
@@ -672,6 +672,33 @@ func TestDefaultOptionsV1(t *testing.T) {
 		}, cmp.Ignore()),
 	); d != "" {
 		t.Errorf("DefaultOptionsV1 mismatch (-got, +want):\n%s", d)
+	}
+}
+
+func TestCallerHelper(t *testing.T) {
+	var gotCaller string
+	c := Codec{ReportDifference: func(d Difference) {
+		gotCaller = d.Caller
+	}}
+	c.SetMarshalCallMode(CallBothButReturnV1)
+
+	helper1 := func() {
+		c.Helper()
+		c.Marshal([]int(nil))
+	}
+	helper2 := func() {
+		c.Helper()
+		helper1()
+	}
+	helper3 := func() {
+		c.Helper()
+		helper2()
+	}
+	wantCaller := callerPlus(c.caller(), 1)
+	helper3()
+
+	if gotCaller != wantCaller {
+		t.Errorf("got %v, want %v", gotCaller, wantCaller)
 	}
 }
 
