@@ -146,17 +146,36 @@ var currentFile = func() string {
 }()
 
 // caller determines the first caller outside of this source file.
-func caller() string {
+func (c *Codec) caller() string {
 	const maxLocalFramesToIgnore = 10
 	for i := range maxLocalFramesToIgnore {
-		switch _, file, line, ok := runtime.Caller(i + 1); {
+		switch pc, file, line, ok := runtime.Caller(i + 1); {
 		case file == currentFile:
 			continue
 		case ok:
+			if _, ok := c.helperFuncs.Load(pcToName(pc)); ok {
+				continue
+			}
 			return fmt.Sprintf("%s:%d", file, line)
 		}
 	}
 	return ""
+}
+
+// Helper marks the calling function as a helper function.
+// When producing a [Difference], that function will be skipped
+// when deriving the caller for marshal or unmarshal.
+func (c *Codec) Helper() {
+	if pc, _, _, ok := runtime.Caller(1); ok {
+		c.helperFuncs.Store(pcToName(pc), struct{}{})
+	}
+}
+
+func pcToName(pc uintptr) string {
+	pcs := []uintptr{pc}
+	frames := runtime.CallersFrames(pcs)
+	frame, _ := frames.Next()
+	return frame.Function
 }
 
 // GlobalCodec is a global instantiation of [Codec].
@@ -225,6 +244,8 @@ type Codec struct {
 	unmarshalCallRatio callModeRatio
 
 	CodecMetrics
+
+	helperFuncs sync.Map // map[string]bool
 }
 
 // CodecMetrics contains metrics about marshal and unmarshal calls.
@@ -531,7 +552,7 @@ func (c *Codec) Marshal(v any, o ...jsonv2.Options) (b []byte, err error) {
 
 		// Check for differences.
 		if !(c.jsonEqual(buf1, buf2) && c.errorsEqual(err1, err2)) {
-			caller := caller()
+			caller := c.caller()
 			c.NumMarshalDiffs.Add(1)
 			c.MarshalCallerHistogram.Add(caller, 1)
 
@@ -666,7 +687,7 @@ func (c *Codec) Unmarshal(b []byte, v any, o ...jsonv2.Options) (err error) {
 
 		// Check for differences.
 		if !(c.goEqual(val1, val2) && c.errorsEqual(err1, err2)) {
-			caller := caller()
+			caller := c.caller()
 			c.NumUnmarshalDiffs.Add(1)
 			c.UnmarshalCallerHistogram.Add(caller, 1)
 
