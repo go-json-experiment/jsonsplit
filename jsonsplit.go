@@ -361,7 +361,7 @@ var differenceOptions = sync.OnceValue(func() jsonv2.Options {
 		jsontext.AllowInvalidUTF8(true),
 		jsonv2.WithMarshalers(jsonv2.JoinMarshalers(
 			jsonv2.MarshalToFunc(func(e *jsontext.Encoder, t reflect.Type) error {
-				return e.WriteToken(jsontext.String(t.String()))
+				return e.WriteToken(jsontext.String(typeString(t)))
 			}),
 			jsonv2.MarshalToFunc(func(e *jsontext.Encoder, v jsontext.Value) error {
 				if !v.IsValid(jsontext.AllowDuplicateNames(true), jsontext.AllowInvalidUTF8(true)) {
@@ -379,6 +379,24 @@ var differenceOptions = sync.OnceValue(func() jsonv2.Options {
 		)),
 	)
 })
+
+// typeString is like [reflect.Type.String], but prints fully qualified names.
+func typeString(t reflect.Type) string {
+	switch {
+	case t.PkgPath() != "" && t.Name() != "":
+		return t.PkgPath() + "." + t.Name()
+	case t.Kind() == reflect.Array:
+		return "[" + strconv.Itoa(t.Len()) + "]" + typeString(t.Elem())
+	case t.Kind() == reflect.Slice:
+		return "[]" + typeString(t.Elem())
+	case t.Kind() == reflect.Map:
+		return "map[" + typeString(t.Key()) + "]" + typeString(t.Elem())
+	case t.Kind() == reflect.Pointer:
+		return "*" + typeString(t.Elem())
+	default:
+		return t.String()
+	}
+}
 
 // MarshalJSON marshals d as JSON in a non-reversible manner and
 // is primarily intended for logging purposes.

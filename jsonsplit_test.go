@@ -1,12 +1,14 @@
 package jsonsplit
 
 import (
+	"archive/tar"
 	"bytes"
 	"encoding"
 	"encoding/json"
 	jsonv1std "encoding/json"
 	"expvar"
 	"fmt"
+	"io/fs"
 	"math"
 	"math/big"
 	"reflect"
@@ -672,6 +674,27 @@ func TestDefaultOptionsV1(t *testing.T) {
 		}, cmp.Ignore()),
 	); d != "" {
 		t.Errorf("DefaultOptionsV1 mismatch (-got, +want):\n%s", d)
+	}
+}
+
+func TestTypeString(t *testing.T) {
+	tests := []struct {
+		in   reflect.Type
+		want string
+	}{
+		{reflect.TypeFor[tar.Header](), "archive/tar.Header"},
+		{reflect.TypeFor[*tar.Header](), "*archive/tar.Header"},
+		{reflect.TypeFor[[]tar.Header](), "[]archive/tar.Header"},
+		{reflect.TypeFor[[]*tar.Header](), "[]*archive/tar.Header"},
+		{reflect.TypeFor[[4]tar.Header](), "[4]archive/tar.Header"},
+		{reflect.TypeFor[map[string]tar.Header](), "map[string]archive/tar.Header"},
+		{reflect.TypeFor[map[fs.FileMode]tar.Header](), "map[io/fs.FileMode]archive/tar.Header"},
+	}
+	for _, tt := range tests {
+		got := typeString(tt.in)
+		if got != tt.want {
+			t.Errorf("typeString(%v) = %v, want %v", tt.in, got, tt.want)
+		}
 	}
 }
 
