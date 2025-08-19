@@ -54,7 +54,7 @@ func equalTypes[Want any](t *testing.T, got any) {
 
 // callerPlus adjusts file:line as file:line+n.
 func callerPlus(s string, n int) string {
-	if i := strings.LastIndexByte(s, ':') + len(":"); i > 0 {
+	if i := strings.LastIndexAny(s, ":+") + len(":"); i > 0 {
 		if m, err := strconv.Atoi(s[i:]); err == nil {
 			s = s[:i] + strconv.Itoa(m+n)
 		}
