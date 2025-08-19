@@ -523,7 +523,7 @@ func (m CallMode) checkValid() {
 // are detected in the serialized JSON output values.
 //
 // The specified options o is applied on top of the default v1 or v2 options.
-// If o is empty or is exactly equal to [jsonv1.DefaultOptionsV1],
+// If o is exactly equal to [jsonv1.DefaultOptionsV1],
 // then this calls [jsonv1std.Marshal] instead of [jsonv1.Marshal]
 // when operating in v1 mode. This allows for detection of differences
 // between [jsonv1std] and [jsonv1].
@@ -626,7 +626,7 @@ func (c *Codec) Marshal(v any, o ...jsonv2.Options) (b []byte, err error) {
 // are detected in the deserialized Go output values.
 //
 // The specified options o is applied on top of the default v1 or v2 options.
-// If o is empty or is exactly equal to [jsonv1.DefaultOptionsV1],
+// If o is exactly equal to [jsonv1.DefaultOptionsV1],
 // then this calls [jsonv1std.Unmarshal] instead of [jsonv1.Unmarshal]
 // when operating in v1 mode. This allows for detection of differences
 // between [jsonv1std] and [jsonv1].
@@ -940,21 +940,29 @@ func isPointerToZero(p reflect.Value) bool {
 // jsonv1Marshal is like [jsonv1.Marshal],
 // but allows specifying options to override default v1 behavior.
 func jsonv1Marshal(v any, o ...jsonv2.Options) ([]byte, error) {
-	if len(o) == 0 || (len(o) == 1 && o[0] == jsonv1.DefaultOptionsV1()) {
+	switch {
+	case len(o) == 0:
+		return jsonv1.Marshal(v)
+	case len(o) == 1 && o[0] == jsonv1.DefaultOptionsV1():
 		return jsonv1std.Marshal(v)
+	default:
+		var arr [8]jsonv2.Options
+		return jsonv2.Marshal(v, append(append(arr[:0], jsonv1.DefaultOptionsV1()), o...)...)
 	}
-	var arr [8]jsonv2.Options
-	return jsonv2.Marshal(v, append(append(arr[:0], jsonv1.DefaultOptionsV1()), o...)...)
 }
 
 // jsonv1Unmarshal is like [jsonv1.Unmarshal],
 // but allows specifying options to override default v1 behavior.
 func jsonv1Unmarshal(b []byte, v any, o ...jsonv2.Options) error {
-	if len(o) == 0 || (len(o) == 1 && o[0] == jsonv1.DefaultOptionsV1()) {
+	switch {
+	case len(o) == 0:
+		return jsonv1.Unmarshal(b, v)
+	case len(o) == 1 && o[0] == jsonv1.DefaultOptionsV1():
 		return jsonv1std.Unmarshal(b, v)
+	default:
+		var arr [8]jsonv2.Options
+		return jsonv2.Unmarshal(b, v, append(append(arr[:0], jsonv1.DefaultOptionsV1()), o...)...)
 	}
-	var arr [8]jsonv2.Options
-	return jsonv2.Unmarshal(b, v, append(append(arr[:0], jsonv1.DefaultOptionsV1()), o...)...)
 }
 
 // elapsed measures the duration of calling f.
