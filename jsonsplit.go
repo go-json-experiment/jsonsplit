@@ -730,7 +730,7 @@ func (c *Codec) Unmarshal(b []byte, v any, o ...jsonv2.Options) (err error) {
 // By default, marshal will use [OnlyCallV1].
 // This is safe to call concurrently with [Codec.Marshal].
 func (c *Codec) SetMarshalCallRatio(mode1, mode2 CallMode, ratio float64) {
-	c.marshalCallRatio.storeModeRatio(mode1, mode2, ratio)
+	c.marshalCallRatio.storeModeRatio(mode1, mode2, float32(ratio))
 }
 
 // SetMarshalCallMode specifies the [CallMode] for marshaling.
@@ -738,6 +738,13 @@ func (c *Codec) SetMarshalCallRatio(mode1, mode2 CallMode, ratio float64) {
 // This is safe to call concurrently with [Codec.Marshal].
 func (c *Codec) SetMarshalCallMode(mode CallMode) {
 	c.marshalCallRatio.storeModeRatio(mode, mode, 1.0)
+}
+
+// MarshalCallRatio retrieves the mode and ratio parameters
+// previously set by [Codec.SetMarshalCallRatio].
+func (c *Codec) MarshalCallRatio() (mode1, mode2 CallMode, ratio float64) {
+	mode1, mode2, ratio32 := c.marshalCallRatio.loadModeRatio()
+	return mode1, mode2, float64(ratio32)
 }
 
 // SetUnmarshalCallRatio sets the ratio of [Codec.Unmarshal] calls
@@ -760,7 +767,7 @@ func (c *Codec) SetMarshalCallMode(mode CallMode) {
 // By default, unmarshal will only use [OnlyCallV1].
 // This is safe to call concurrently with [Codec.Unmarshal].
 func (c *Codec) SetUnmarshalCallRatio(mode1, mode2 CallMode, ratio float64) {
-	c.unmarshalCallRatio.storeModeRatio(mode1, mode2, ratio)
+	c.unmarshalCallRatio.storeModeRatio(mode1, mode2, float32(ratio))
 }
 
 // SetUnmarshalCallMode specifies the [CallMode] for unmarshaling.
@@ -770,6 +777,13 @@ func (c *Codec) SetUnmarshalCallMode(mode CallMode) {
 	c.unmarshalCallRatio.storeModeRatio(mode, mode, 1.0)
 }
 
+// UnmarshalCallRatio retrieves the mode and ratio parameters
+// previously set by [Codec.SetUnmarshalCallRatio].
+func (c *Codec) UnmarshalCallRatio() (mode1, mode2 CallMode, ratio float64) {
+	mode1, mode2, ratio32 := c.unmarshalCallRatio.loadModeRatio()
+	return mode1, mode2, float64(ratio32)
+}
+
 // callModeRatio non-deterministically determines which call mode to use.
 type callModeRatio struct {
 	atomic.Uint64 // [0:16) is mode1, [16:32) is mode2, and [32:] is the ratio as raw float32
@@ -777,7 +791,7 @@ type callModeRatio struct {
 
 // storeModeRatio stores a call mode ratio.
 // See [Codec.SetMarshalCallRatio] or [Codec.SetUnmarshalCallRatio].
-func (p *callModeRatio) storeModeRatio(mode1, mode2 CallMode, ratio float64) {
+func (p *callModeRatio) storeModeRatio(mode1, mode2 CallMode, ratio float32) {
 	mode1.checkValid()
 	mode2.checkValid()
 	if ratio != min(max(0, ratio), 1) {
@@ -790,12 +804,17 @@ func (p *callModeRatio) storeModeRatio(mode1, mode2 CallMode, ratio float64) {
 	p.Store(u)
 }
 
+func (p *callModeRatio) loadModeRatio() (mode1, mode2 CallMode, ratio float32) {
+	u := p.Load()
+	mode1 = CallMode((u >> 0) & 0xffff)
+	mode2 = CallMode((u >> 16) & 0xffff)
+	ratio = math.Float32frombits(uint32(u >> 32))
+	return mode1, mode2, ratio
+}
+
 // loadRandomMode loads a random mode according to the ratio.
 func (p *callModeRatio) loadRandomMode() CallMode {
-	u := p.Load()
-	mode1 := CallMode((u >> 0) & 0xffff)
-	mode2 := CallMode((u >> 16) & 0xffff)
-	ratio := math.Float32frombits(uint32(u >> 32))
+	mode1, mode2, ratio := p.loadModeRatio()
 	if ratio < 1 && rand.Float32() >= ratio {
 		return mode1
 	} else {
