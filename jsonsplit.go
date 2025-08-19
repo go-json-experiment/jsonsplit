@@ -149,14 +149,41 @@ var currentFile = func() string {
 func caller() string {
 	const maxLocalFramesToIgnore = 10
 	for i := range maxLocalFramesToIgnore {
-		switch _, file, line, ok := runtime.Caller(i + 1); {
-		case file == currentFile:
+		switch pc, callFile, callLine, ok := runtime.Caller(i + 1); {
+		case callFile == currentFile:
 			continue
 		case ok:
-			return fmt.Sprintf("%s:%d", file, line)
+			fr := pcToFrame(pc)
+
+			// Prefer using unique function name with a relative line offset.
+			// This representation is more stable against version drift.
+			// See https://research.swtch.com/telemetry-design
+			//
+			// For example:
+			//	path/to/package.Function+123
+			if fr.Func != nil {
+				funcFile, funcLine := fr.Func.FileLine(fr.Entry)
+				if funcFile == callFile && callLine >= funcLine {
+					return fmt.Sprintf("%s+%d", fr.Function, callLine-funcLine)
+				}
+			}
+
+			// Otherwise, use the full caller file and line number.
+			// This representation is often verbose and less stable.
+			//
+			// For example:
+			//	/path/to/package/source.go:1234
+			return fmt.Sprintf("%s:%d", callFile, callLine)
 		}
 	}
 	return ""
+}
+
+func pcToFrame(pc uintptr) runtime.Frame {
+	pcs := []uintptr{pc}
+	frames := runtime.CallersFrames(pcs)
+	frame, _ := frames.Next()
+	return frame
 }
 
 // GlobalCodec is a global instantiation of [Codec].
@@ -323,7 +350,8 @@ type CodecMetrics struct {
 // Difference is a structured representation of the difference detected
 // between the outputs of a v1 and v2 marshal or unmarshal call.
 type Difference struct {
-	// Caller is the file and line number of the caller.
+	// Caller is the function name and relative line offset of the caller.
+	// For example, "path/to/package.Function+123".
 	Caller string `json:",omitzero"`
 	// Func is the operation and is either "Marshal" or "Unmarshal".
 	Func string `json:",omitzero"`
