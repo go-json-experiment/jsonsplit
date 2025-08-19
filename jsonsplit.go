@@ -145,16 +145,31 @@ var currentFile = func() string {
 	return file
 }()
 
-// caller determines the first caller outside of this source file.
-func caller() string {
-	const maxLocalFramesToIgnore = 10
-	for i := range maxLocalFramesToIgnore {
-		switch pc, callFile, callLine, ok := runtime.Caller(i + 1); {
-		case callFile == currentFile:
-			continue
-		case ok:
-			fr := pcToFrame(pc)
+// Helper marks the calling function as a helper function.
+// When producing a [Difference], that function will be skipped
+// when deriving the caller for marshal or unmarshal.
+func (c *Codec) Helper() {
+	var pcs [1]uintptr
+	runtime.Callers(2, pcs[:]) // skip [runtime.Callers] + [Codec.Helper]
+	if _, ok := c.helperCallers.Load(pcs[0]); ok {
+		return // no allocations in the fast-path
+	}
+	c.helperCallers.Store(pcs[0], struct{}{})
+	c.helperEntries.Store(pcToFrame(pcs[0]).Entry, struct{}{})
+}
 
+// caller determines the caller of Marshal or Unmarshal,
+// skipping over frames within functions marked as [Codec.Helper].
+func (c *Codec) caller() string {
+	const maxStackLen = 50 // same as "testing".maxStackLen
+	var pcs [maxStackLen]uintptr
+	n := runtime.Callers(2, pcs[:]) // skip [runtime.Callers] + [Codec.caller]
+	frames := runtime.CallersFrames(pcs[:n])
+	for {
+		fr, more := frames.Next()
+		_, skip := c.helperEntries.Load(fr.Entry)
+		skip = skip || fr.File == currentFile
+		if !skip || !more {
 			// Prefer using unique function name with a relative line offset.
 			// This representation is more stable against version drift.
 			// See https://research.swtch.com/telemetry-design
@@ -163,8 +178,8 @@ func caller() string {
 			//	path/to/package.Function+123
 			if fr.Func != nil {
 				funcFile, funcLine := fr.Func.FileLine(fr.Entry)
-				if funcFile == callFile && callLine >= funcLine {
-					return fmt.Sprintf("%s+%d", fr.Function, callLine-funcLine)
+				if funcFile == fr.File && fr.Line >= funcLine {
+					return fmt.Sprintf("%s+%d", fr.Function, fr.Line-funcLine)
 				}
 			}
 
@@ -173,10 +188,9 @@ func caller() string {
 			//
 			// For example:
 			//	/path/to/package/source.go:1234
-			return fmt.Sprintf("%s:%d", callFile, callLine)
+			return fmt.Sprintf("%s:%d", fr.File, fr.Line)
 		}
 	}
-	return ""
 }
 
 func pcToFrame(pc uintptr) runtime.Frame {
@@ -252,6 +266,16 @@ type Codec struct {
 	unmarshalCallRatio callModeRatio
 
 	CodecMetrics
+
+	// helperCallers is the set of PCs that called [Codec.Helper].
+	// It is used as a cache to avoid fetching the [runtime.Frame],
+	// so that repeated calls to [Codec.Helper] remain fast.
+	helperCallers sync.Map // map[uintptr]struct{}
+
+	// helperEntries is the set of PCs for the entry point of
+	// each function that called [Codec.Helper].
+	// This is what is actually used to elide frames in [Caller].
+	helperEntries sync.Map // map[uintptr]struct{}
 }
 
 // CodecMetrics contains metrics about marshal and unmarshal calls.
@@ -577,7 +601,7 @@ func (c *Codec) Marshal(v any, o ...jsonv2.Options) (b []byte, err error) {
 
 		// Check for differences.
 		if !(c.jsonEqual(buf1, buf2) && c.errorsEqual(err1, err2)) {
-			caller := caller()
+			caller := c.caller()
 			c.NumMarshalDiffs.Add(1)
 			c.MarshalCallerHistogram.Add(caller, 1)
 
@@ -712,7 +736,7 @@ func (c *Codec) Unmarshal(b []byte, v any, o ...jsonv2.Options) (err error) {
 
 		// Check for differences.
 		if !(c.goEqual(val1, val2) && c.errorsEqual(err1, err2)) {
-			caller := caller()
+			caller := c.caller()
 			c.NumUnmarshalDiffs.Add(1)
 			c.UnmarshalCallerHistogram.Add(caller, 1)
 
