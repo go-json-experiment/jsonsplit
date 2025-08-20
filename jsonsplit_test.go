@@ -1,3 +1,7 @@
+// Copyright 2025 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package jsonsplit
 
 import (
@@ -429,13 +433,15 @@ func TestCodecUnmarshal(t *testing.T) {
 		in:     []byte(`{"Fizz":null}`),
 		newOut: func() any { return &struct{ Fizz string }{"something"} },
 	}, {
-		mode:   CallBothButReturnV1,
-		in:     []byte(`{"Fizz":null}`),
-		newOut: func() any { return &struct{ Fizz string }{"something"} },
+		mode:     CallBothButReturnV1,
+		in:       []byte(`{"Fizz":null}`),
+		newOut:   func() any { return &struct{ Fizz string }{"something"} },
+		diffOpts: optsOf(jsonv1.MergeWithLegacySemantics),
 	}, {
-		mode:   CallBothButReturnV2,
-		in:     []byte(`{"Fizz":null}`),
-		newOut: func() any { return &struct{ Fizz string }{"something"} },
+		mode:     CallBothButReturnV2,
+		in:       []byte(`{"Fizz":null}`),
+		newOut:   func() any { return &struct{ Fizz string }{"something"} },
+		diffOpts: optsOf(jsonv1.MergeWithLegacySemantics),
 	}, {
 		mode:   CallV2ButUponErrorReturnV1,
 		in:     []byte(`{"Fizz":null}`),
@@ -745,6 +751,47 @@ func BenchmarkHelper(b *testing.B) {
 	for b.Loop() {
 		c.Helper()
 	}
+}
+
+func TestCloneGoValue(t *testing.T) {
+	tests := []struct {
+		in   any
+		want any
+	}{{
+		in:   nil,
+		want: nil,
+	}, {
+		in:   5,
+		want: 5,
+	}, {
+		in:   "hello, world",
+		want: "hello, world",
+	}, {
+		in:   ptrTo(tar.Header{}),
+		want: ptrTo(tar.Header{}),
+	}, {
+		in:   ptrTo(tar.Header{Typeflag: 'f', Name: "fizz", Size: 123, Uid: 456, Uname: "root", ModTime: time.Date(2025, 1, 2, 3, 4, 5, 6, time.UTC)}),
+		want: ptrTo(tar.Header{Typeflag: 'f', Name: "fizz", Size: 123, Uid: 456, Uname: "root", ModTime: time.Date(2025, 1, 2, 3, 4, 5, 6, time.UTC)}),
+	}, {
+		in:   ptrTo(ptrTo(tar.Header{})),
+		want: nil,
+	}, {
+		in:   ptrTo(tar.Header{Xattrs: map[string]string{"fizz": "buzz"}}),
+		want: nil, // cannot copy due to Xattrs map
+	}, {
+		in:   ptrTo(5),
+		want: ptrTo(5),
+	}}
+	for _, tt := range tests {
+		got := cloneGoValue(tt.in)
+		if d := cmp.Diff(got, tt.want, cmp.Exporter(func(reflect.Type) bool { return true })); d != "" {
+			t.Errorf("clone mismatch (-got +want)\n:%s", d)
+		}
+	}
+}
+
+func ptrTo[T any](v T) *T {
+	return &v
 }
 
 func BenchmarkMarshal(b *testing.B) {
