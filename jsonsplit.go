@@ -121,6 +121,7 @@ package jsonsplit
 
 import (
 	"bytes"
+	"errors"
 	"expvar"
 	"fmt"
 	"iter"
@@ -355,6 +356,10 @@ type CodecMetrics struct {
 	NumUnmarshalReturnV2 expvar.Int
 	// NumUnmarshalDiffs is the number of times that [Codec.Unmarshal] detected
 	// a difference between the outputs of [jsonv1.Unmarshal] and [jsonv2.Unmarshal].
+	//
+	// This includes counts in [CodecMetrics.NumUnmarshalCallBothSkipped]
+	// as inability to check for differences is treated as a difference
+	// to avoid false assurance that there are no differences.
 	NumUnmarshalDiffs expvar.Int
 
 	// ExecTimeUnmarshalV1Nanos is the total number of nanoseconds
@@ -683,13 +688,37 @@ func (c *Codec) Unmarshal(b []byte, v any, o ...jsonv2.Options) (err error) {
 		// Make sure we can clone the output, otherwise we cannot call both.
 		valOrig := c.cloneGoValue(v)
 		if valOrig == nil {
+			// Treat uncloneable inputs as a difference.
+			caller := c.caller()
+			c.NumUnmarshalDiffs.Add(1)
 			c.NumUnmarshalCallBothSkipped.Add(1)
+			c.UnmarshalCallerHistogram.Add(caller, 1)
 			switch mode {
 			case CallV1ButUponErrorReturnV2, CallBothButReturnV1:
+				if c.ReportDifference != nil {
+					c.ReportDifference(Difference{
+						Caller:    caller,
+						Func:      "Unmarshal",
+						GoType:    reflect.TypeOf(v),
+						JSONValue: b,
+						GoValueV1: v,
+						ErrorV2:   ErrNotCloneable,
+					})
+				}
 				c.NumUnmarshalOnlyCallV1.Add(1)
 				c.NumUnmarshalReturnV1.Add(1)
 				return jsonv1Unmarshal(b, v, o...)
 			case CallBothButReturnV2, CallV2ButUponErrorReturnV1:
+				if c.ReportDifference != nil {
+					c.ReportDifference(Difference{
+						Caller:    caller,
+						Func:      "Unmarshal",
+						GoType:    reflect.TypeOf(v),
+						JSONValue: b,
+						GoValueV2: v,
+						ErrorV1:   ErrNotCloneable,
+					})
+				}
 				c.NumUnmarshalOnlyCallV2.Add(1)
 				c.NumUnmarshalReturnV2.Add(1)
 				return jsonv2.Unmarshal(b, v, o...)
@@ -952,6 +981,18 @@ func (c *Codec) cloneGoValue(v any) any {
 	}
 	return cloneGoValue(v)
 }
+
+// ErrNotCloneable reports that [Codec.Unmarshal] was unable to clone
+// the output Go value, so it could not unmarshal with both v1 and v2
+// in order to properly check for any differences.
+//
+// [Codec.ReportDifference] is still called and this sentinel error
+// is specified as [Difference.ErrorV1] or [Difference.ErrorV2].
+// If [Difference.ErrorV1] is this error, then [Difference.GoValueV2]
+// is the input value prior to unmarshal and [Difference.GoValueV1] is nil.
+// If [Difference.ErrorV2] is this error, then [Difference.GoValueV1]
+// is the input value prior to unmarshal and [Difference.GoValueV2] is nil.
+var ErrNotCloneable = errors.New("Go value could not be cloned")
 
 // cloneGoValue clones the input value such that the result
 // does not alias any mutable memory.

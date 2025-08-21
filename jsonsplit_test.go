@@ -452,6 +452,24 @@ func TestCodecUnmarshal(t *testing.T) {
 		newOut:   func() any { return &struct{ Fizz string }{"something"} },
 		canClone: true,
 		diffOpts: optsOf(jsonv1.MergeWithLegacySemantics),
+	}, {
+		mode: CallBothButReturnV1,
+		in:   []byte(`{"Fizz":null}`),
+		newOut: func() any {
+			return &struct {
+				Fizz string
+				Buzz []int
+			}{"something", []int{1, 2, 3}}
+		},
+	}, {
+		mode: CallBothButReturnV2,
+		in:   []byte(`{"Fizz":null}`),
+		newOut: func() any {
+			return &struct {
+				Fizz string
+				Buzz []int
+			}{"something", []int{1, 2, 3}}
+		},
 	}} {
 		t.Run("", func(t *testing.T) {
 			codec.SetUnmarshalCallMode(tt.mode)
@@ -560,6 +578,20 @@ func TestCodecUnmarshal(t *testing.T) {
 					GoValueV1: wantValV1, GoValueV2: wantValV2,
 					ErrorV1: wantErrV1, ErrorV2: wantErrV2,
 					Options: jsonv2.JoinOptions(tt.diffOpts),
+				}
+			}
+			if cantClone {
+				wantDiff = Difference{
+					Caller: c, Func: "Unmarshal",
+					GoType: reflect.TypeOf(gotVal), JSONValue: tt.in,
+				}
+				if gotDiff.GoValueV1 != nil {
+					wantDiff.GoValueV1 = gotDiff.GoValueV1
+					wantDiff.ErrorV2 = ErrNotCloneable
+				}
+				if gotDiff.GoValueV2 != nil {
+					wantDiff.GoValueV2 = gotDiff.GoValueV2
+					wantDiff.ErrorV1 = ErrNotCloneable
 				}
 			}
 			if d := cmp.Diff(gotDiff, wantDiff,
