@@ -30,9 +30,9 @@
 //		jsonsplit.GlobalCodec.AutoDetectOptions = true
 //
 //		// Log every time we detect a difference between v1 and v2.
-//		jsonsplit.GlobalCodec.ReportDifference(func(d jsonsplit.Difference) {
+//		jsonsplit.GlobalCodec.ReportDifference = func(d jsonsplit.Difference) {
 //			slog.Warn("detected jsonv1-to-jsonv2 difference", "diff", d)
-//		})
+//		}
 //
 //		// Specify that we try both v1 and v2 with some probability,
 //		// but to always return v1 results.
