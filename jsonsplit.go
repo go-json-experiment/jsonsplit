@@ -3,10 +3,10 @@
 // license that can be found in the LICENSE file.
 
 // Package jsonsplit provides JSON functionality that can dynamically switch
-// the underlying implementation between [jsonv1] and [jsonv2].
-// The purpose of this package is to provide a gradual means for migrating
-// from v1 to v2 and detecting which options (if any) need to be specified
-// in order to maintain backwards compatibility.
+// the underlying implementation between [encoding/json] and
+// [encoding/json/v2]. The purpose of this package is to provide a gradual
+// means for migrating from v1 to v2 and detecting which options (if any) need
+// to be specified in order to maintain backwards compatibility.
 //
 // Whether it is safe to directly use v2 is dependent on both
 // static properties of the Go types being serialized and also
@@ -14,13 +14,13 @@
 // Many of the changed behaviors in v2 can be directly specified
 // on Go struct fields to ensure that the struct type is represented
 // in the same way in both v1 and v2. Alternatively, some options may
-// need to be specified when calling [jsonv2.Marshal] or [jsonv2.Unmarshal]
-// to preserve a particular v1 behavior.
+// need to be specified when calling [encoding/json/v2.Marshal] or
+// [encoding/json/v2.Unmarshal] to preserve a particular v1 behavior.
 //
 // # Example usage and migration
 //
-// 1. Replace existing calls of [jsonv1.Unmarshal] with [jsonsplit.Unmarshal].
-// By default, [jsonsplit] calls [jsonv1], so this is identical behavior.
+// 1. Replace existing calls of [encoding/json.Unmarshal] with [jsonsplit.Unmarshal].
+// By default, [jsonsplit] calls [encoding/json], so this is identical behavior.
 //
 // 2. Configure [jsonsplit] to call both v1 and v2 and report any differences:
 //
@@ -66,8 +66,8 @@
 //	}
 //
 // which happens to work fine in v1 because
-// [jsonv1] uses case-insensitive matching by default, while
-// [jsonv2] use case-sensitive matching by default.
+// [encoding/json] uses case-insensitive matching by default, while
+// [encoding/json/v2] use case-sensitive matching by default.
 //
 // There are two ways to resolve this difference.
 //
@@ -79,19 +79,19 @@
 //	}
 //
 // This has the advantage of making sure this struct operates the same
-// regardless of whether it is called by [jsonv1] or [jsonv2].
+// regardless of whether it is called by [encoding/json] or [encoding/json/v2].
 // However, this has the disadvantage of requiring tedious modification
 // of every field in the Go struct and may not even be possible
 // if the declaration of the Go type is not within your control.
 //
-// 4b. (Option 2) We can call [jsonv2] with [jsonv2.MatchCaseInsensitiveNames]:
+// 4b. (Option 2) We can call [encoding/json/v2] with [encoding/json/v2.MatchCaseInsensitiveNames]:
 //
 //	... := jsonsplit.Marshal(v, jsonv2.MatchCaseInsensitiveNames(true))
 //
 // This has the advantage of being able alter the behavior of unmarshal
 // at the call site, affecting all types that it recursively reaches.
 // This has the disadvantage that the type will behave differently
-// depending on whether it is called by [jsonv1] and [jsonv2]
+// depending on whether it is called by [encoding/json] and [encoding/json/v2]
 // with the default behavior.
 //
 // 5. Let the program run for a while and
@@ -112,11 +112,11 @@
 // This will occasionally return the results of v2 and
 // you can verify that your program continues to function as expected.
 //
-// 6. After increasing exclusive use of v2 to 100% and
-// still not encountering any issues, we can now confidently replace
-// [jsonsplit.Unmarshal] with [jsonv2.Unmarshal] (and possibly with
-// [jsonv2.MatchCaseInsensitiveNames] if we need to maintain backwards
-// compatibility or drop it if we decide to allow a breaking change).
+// 6. After increasing exclusive use of v2 to 100% and still not encountering
+// any issues, we can now confidently replace [jsonsplit.Unmarshal] with
+// [encoding/json/v2.Unmarshal] (and possibly with
+// [encoding/json/v2.MatchCaseInsensitiveNames] if we need to maintain
+// backwards compatibility or drop it if we decide to allow a breaking change).
 package jsonsplit
 
 import (
@@ -208,16 +208,16 @@ func pcToFrame(pc uintptr) runtime.Frame {
 // GlobalCodec is a global instantiation of [Codec].
 var GlobalCodec Codec
 
-// Marshal marshals from v with either [jsonv1.Marshal] or [jsonv2.Marshal]
-// depending on the mode specified in [Codec.SetMarshalCallRatio]
-// on the [GlobalCodec] variable.
+// Marshal marshals from v with either [encoding/json.Marshal] or
+// [encoding/json/v2.Marshal] depending on the mode specified in
+// [Codec.SetMarshalCallRatio] on the [GlobalCodec] variable.
 func Marshal(v any, o ...jsonv2.Options) (b []byte, err error) {
 	return GlobalCodec.Marshal(v, o...)
 }
 
-// Unmarshal unmarshals into v with either [jsonv1.Unmarshal] or [jsonv2.Unmarshal]
-// depending on the mode specified in [Codec.SetUnmarshalCallRatio]
-// on the [GlobalCodec] variable.
+// Unmarshal unmarshals into v with either [encoding/json.Unmarshal] or
+// [encoding/json/v2.Unmarshal] depending on the mode specified in
+// [Codec.SetUnmarshalCallRatio] on the [GlobalCodec] variable.
 func Unmarshal(b []byte, v any, o ...jsonv2.Options) error {
 	return GlobalCodec.Unmarshal(b, v, o...)
 }
@@ -232,8 +232,9 @@ func Publish() {
 // The zero value is ready for use and by default will [OnlyCallV1].
 type Codec struct {
 	// AutoDetectOptions specifies whether to automatically detect which
-	// [jsontext], [jsonv1], or [jsonv2] options are needed to preserve
-	// identical behavior between v1 and v2 once a difference has been detected.
+	// [encoding/json/jsontext], [encoding/json], or [encoding/json/v2]
+	// options are needed to preserve identical behavior between v1 and v2
+	// once a difference has been detected.
 	//
 	// Auto-detection is relatively slow and will need to run marshal/unmarshal
 	// many extra times. In performance sensitive systems,
@@ -291,30 +292,32 @@ type CodecMetrics struct {
 	// that returned an error.
 	NumMarshalErrors expvar.Int
 	// NumMarshalOnlyCallV1 is the number of [Codec.Marshal] calls
-	// that only delegated the call to [jsonv1.Marshal].
+	// that only delegated the call to [encoding/json.Marshal].
 	NumMarshalOnlyCallV1 expvar.Int
 	// NumMarshalOnlyCallV2 is the number of [Codec.Marshal] calls
-	// that only delegated the call to [jsonv2.Marshal].
+	// that only delegated the call to [encoding/json/v2.Marshal].
 	NumMarshalOnlyCallV2 expvar.Int
 	// NumMarshalCallBoth is the number of [Codec.Marshal] calls
-	// that called both [jsonv1.Marshal] and [jsonv2.Marshal].
+	// that called both [encoding/json.Marshal] and
+	// [encoding/json/v2.Marshal].
 	NumMarshalCallBoth expvar.Int
 	// NumMarshalReturnV1 is the number of [Codec.Marshal] calls
-	// that used the result of [jsonv1.Marshal].
+	// that used the result of [encoding/json.Marshal].
 	NumMarshalReturnV1 expvar.Int
 	// NumMarshalReturnV2 is the number of [Codec.Marshal] calls
-	// that used the result of [jsonv2.Marshal].
+	// that used the result of [encoding/json/v2.Marshal].
 	NumMarshalReturnV2 expvar.Int
 	// NumMarshalDiffs is the number of times that [Codec.Marshal] detected
-	// a difference between the outputs of [jsonv1.Marshal] and [jsonv2.Marshal].
+	// a difference between the outputs of [encoding/json.Marshal] and
+	// [encoding/json/v2.Marshal].
 	NumMarshalDiffs expvar.Int
 
 	// ExecTimeMarshalV1Nanos is the total number of nanoseconds
-	// spent in a [jsonv1.Marshal] call when comparing both v1 and v2.
+	// spent in a [encoding/json.Marshal] call when comparing both v1 and v2.
 	// It excludes time spent only calling v1.
 	ExecTimeMarshalV1Nanos expvar.Int
 	// ExecTimeMarshalV2Nanos is the total number of nanoseconds
-	// spent in a [jsonv2.Marshal] call when comparing both v1 and v2.
+	// spent in a [encoding/json/v2.Marshal] call when comparing both v1 and v2.
 	// It excludes time spent only calling v2.
 	ExecTimeMarshalV2Nanos expvar.Int
 
@@ -337,25 +340,27 @@ type CodecMetrics struct {
 	// where the output argument is a pointer to a non-zero value.
 	NumUnmarshalMerge expvar.Int
 	// NumUnmarshalOnlyCallV1 is the number of [Codec.Unmarshal] calls
-	// that only delegated the call to [jsonv1.Unmarshal].
+	// that only delegated the call to [encoding/json.Unmarshal].
 	NumUnmarshalOnlyCallV1 expvar.Int
 	// NumUnmarshalOnlyCallV2 is the number of [Codec.Unmarshal] calls
-	// that only delegated the call to [jsonv2.Unmarshal].
+	// that only delegated the call to [encoding/json/v2.Unmarshal].
 	NumUnmarshalOnlyCallV2 expvar.Int
 	// NumUnmarshalCallBoth is the number of [Codec.Unmarshal] calls
-	// that called both [jsonv1.Unmarshal] and [jsonv2.Unmarshal].
+	// that called both [encoding/json.Unmarshal] and
+	// [encoding/json/v2.Unmarshal].
 	NumUnmarshalCallBoth expvar.Int
 	// NumUnmarshalCallBothSkipped is the number of [Codec.Unmarshal] calls
 	// that could not call both v1 and v2 because of some problem.
 	NumUnmarshalCallBothSkipped expvar.Int
 	// NumUnmarshalReturnV1 is the number of [Codec.Unmarshal] calls
-	// that used the result of [jsonv1.Unmarshal].
+	// that used the result of [encoding/json.Unmarshal].
 	NumUnmarshalReturnV1 expvar.Int
 	// NumUnmarshalReturnV2 is the number of [Codec.Unmarshal] calls
-	// that used the result of [jsonv2.Unmarshal].
+	// that used the result of [encoding/json/v2.Unmarshal].
 	NumUnmarshalReturnV2 expvar.Int
 	// NumUnmarshalDiffs is the number of times that [Codec.Unmarshal] detected
-	// a difference between the outputs of [jsonv1.Unmarshal] and [jsonv2.Unmarshal].
+	// a difference between the outputs of [encoding/json.Unmarshal] and
+	// [encoding/json/v2.Unmarshal].
 	//
 	// This includes counts in [CodecMetrics.NumUnmarshalCallBothSkipped]
 	// as inability to check for differences is treated as a difference
@@ -363,10 +368,10 @@ type CodecMetrics struct {
 	NumUnmarshalDiffs expvar.Int
 
 	// ExecTimeUnmarshalV1Nanos is the total number of nanoseconds
-	// spent in a [jsonv1.Unmarshal] call when comparing both v1 and v2.
+	// spent in a [encoding/json.Unmarshal] call when comparing both v1 and v2.
 	ExecTimeUnmarshalV1Nanos expvar.Int
 	// ExecTimeUnmarshalV2Nanos is the total number of nanoseconds
-	// spent in a [jsonv2.Unmarshal] call when comparing both v1 and v2.
+	// spent in a [encoding/json/v2.Unmarshal] call when comparing both v1 and v2.
 	ExecTimeUnmarshalV2Nanos expvar.Int
 
 	// UnmarshalSizeHistogram is a histogram of JSON input sizes to [Codec.Unmarshal]
@@ -465,7 +470,7 @@ func typeString(t reflect.Type) string {
 // In particular, it uses:
 //   - [reflect.Type.String] to encode a Go type
 //   - [error.Error] to encode a Go error
-//   - [Difference.OptionNames] to encode a [jsonv2.Options]
+//   - [Difference.OptionNames] to encode a [encoding/json/v2.Options]
 func (d Difference) MarshalJSON() ([]byte, error) {
 	type difference Difference
 	return jsonv2.Marshal(difference(d), differenceOptions())
@@ -550,16 +555,12 @@ func (m CallMode) checkValid() {
 	}
 }
 
-// Marshal marshals from v with either [jsonv1.Marshal] or [jsonv2.Marshal]
-// depending on the mode specified in [Codec.SetMarshalCallRatio].
-// If both v1 and v2 are called, it checks whether any differences
-// are detected in the serialized JSON output values.
+// Marshal marshals from v with either [encoding/json.Marshal] or
+// [encoding/json/v2.Marshal] depending on the mode specified in
+// [Codec.SetMarshalCallRatio]. If both v1 and v2 are called, it checks whether
+// any differences are detected in the serialized JSON output values.
 //
 // The specified options o is applied on top of the default v1 or v2 options.
-// If o is exactly equal to [jsonv1.DefaultOptionsV1],
-// then this calls [jsonv1std.Marshal] instead of [jsonv1.Marshal]
-// when operating in v1 mode. This allows for detection of differences
-// between [jsonv1std] and [jsonv1].
 func (c *Codec) Marshal(v any, o ...jsonv2.Options) (b []byte, err error) {
 	c.NumMarshalTotal.Add(1)
 	defer func() {
@@ -653,16 +654,12 @@ func (c *Codec) Marshal(v any, o ...jsonv2.Options) (b []byte, err error) {
 	panic("unknown mode")
 }
 
-// Unmarshal unmarshals to v with either [jsonv1.Unmarshal] or [jsonv2.Unmarshal]
-// depending on the mode specified in [Codec.SetUnmarshalCallRatio].
-// If both v1 and v2 are called, it checks whether any differences
-// are detected in the deserialized Go output values.
+// Unmarshal unmarshals to v with either [encoding/json.Unmarshal] or
+// [encoding/json/v2.Unmarshal] depending on the mode specified in
+// [Codec.SetUnmarshalCallRatio]. If both v1 and v2 are called, it checks
+// whether any differences are detected in the deserialized Go output values.
 //
 // The specified options o is applied on top of the default v1 or v2 options.
-// If o is exactly equal to [jsonv1.DefaultOptionsV1],
-// then this calls [jsonv1std.Unmarshal] instead of [jsonv1.Unmarshal]
-// when operating in v1 mode. This allows for detection of differences
-// between [jsonv1std] and [jsonv1].
 func (c *Codec) Unmarshal(b []byte, v any, o ...jsonv2.Options) (err error) {
 	c.NumUnmarshalTotal.Add(1)
 	c.UnmarshalSizeHistogram.insertSize(len(b))
@@ -1047,13 +1044,16 @@ func isPointerToZero(p reflect.Value) bool {
 	return p.Kind() == reflect.Pointer && !p.IsNil() && p.Elem().IsZero()
 }
 
-// jsonv1Marshal is like [jsonv1.Marshal],
+// jsonv1Marshal is like [encoding/json.Marshal],
 // but allows specifying options to override default v1 behavior.
 func jsonv1Marshal(v any, o ...jsonv2.Options) ([]byte, error) {
 	switch {
 	case len(o) == 0:
 		return jsonv1.Marshal(v)
 	case len(o) == 1 && o[0] == jsonv1.DefaultOptionsV1():
+		// If o is exactly equal to jsonv1.DefaultOptionsV1, call
+		// jsonv1std.Marshal instead of jsonv1.Marshal. This allows for
+		// detection of differences between jsonv1std and jsonv1.
 		return jsonv1std.Marshal(v)
 	default:
 		var arr [8]jsonv2.Options
@@ -1061,13 +1061,16 @@ func jsonv1Marshal(v any, o ...jsonv2.Options) ([]byte, error) {
 	}
 }
 
-// jsonv1Unmarshal is like [jsonv1.Unmarshal],
+// jsonv1Unmarshal is like [encoding/json.Unmarshal],
 // but allows specifying options to override default v1 behavior.
 func jsonv1Unmarshal(b []byte, v any, o ...jsonv2.Options) error {
 	switch {
 	case len(o) == 0:
 		return jsonv1.Unmarshal(b, v)
 	case len(o) == 1 && o[0] == jsonv1.DefaultOptionsV1():
+		// If o is exactly equal to jsonv1.DefaultOptionsV1, call
+		// jsonv1std.Unmarshal instead of jsonv1.Unmarshal. This allows for
+		// detection of differences between jsonv1std and jsonv1.
 		return jsonv1std.Unmarshal(b, v)
 	default:
 		var arr [8]jsonv2.Options
@@ -1143,13 +1146,13 @@ func (h *SizeHistogram) String() string {
 	return string(b)
 }
 
-// autoDetectOptions automatically detects which options
-// need to be specified to [jsonv2.Marshal] or [jsonv2.Unmarshal]
-// in order for it to preserve the same behavior as v1.
+// autoDetectOptions automatically detects which options need to be specified
+// to [encoding/json/v2.Marshal] or [encoding/json/v2.Unmarshal] in order for
+// it to preserve the same behavior as v1.
 //
-// The arshalEqual function runs [jsonv2.Marshal] or [jsonv2.Unmarshal]
-// function with the provided options and reports whether
-// the output is identical to the results from v1.
+// The arshalEqual function runs [encoding/json/v2.Marshal] or
+// [encoding/json/v2.Unmarshal] function with the provided options and reports
+// whether the output is identical to the results from v1.
 func autoDetectOptions(arshalEqual func(...jsonv2.Options) bool, o ...jsonv2.Options) jsonv2.Options {
 	optsCall := jsonv2.JoinOptions(o...)                              // explicit options by caller
 	optsV1 := jsonv2.JoinOptions(jsonv1.DefaultOptionsV1(), optsCall) // caller options using v1 defaults
@@ -1168,8 +1171,8 @@ func autoDetectOptions(arshalEqual func(...jsonv2.Options) bool, o ...jsonv2.Opt
 	// without multiple runs due to it's non-deterministic nature.
 
 	// TODO: Some options are sub-options of others. A linear search may not
-	// properly detected them. For example, [jsonv1.MatchCaseSensitiveDelimiter]
-	// is only significant with [jsonv2.MatchCaseInsensitiveNames].
+	// properly detected them. For example, [encoding/json.MatchCaseSensitiveDelimiter]
+	// is only significant with [encoding/json/v2.MatchCaseInsensitiveNames].
 
 	// Iterate through all the default options for v1 and
 	// set just a single v1 option to false and see if it affects equality.
@@ -1187,7 +1190,7 @@ func autoDetectOptions(arshalEqual func(...jsonv2.Options) bool, o ...jsonv2.Opt
 	return jsonv2.JoinOptions(opts...)
 }
 
-// defaultOptionsV1 is the set of all options in [jsonv1.DefaultOptionsV1].
+// defaultOptionsV1 is the set of all options in [encoding/json.DefaultOptionsV1].
 // TODO: We should support a way to iterate through all singular options.
 var defaultOptionsV1 = map[string]func(bool) jsonv2.Options{
 	"jsontext.AllowDuplicateNames":           jsontext.AllowDuplicateNames,
